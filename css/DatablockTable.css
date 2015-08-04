@@ -1,0 +1,65 @@
+.grid-viewport {
+	width: 600px;
+    height: 500px;
+    overflow: hidden;
+    outline: 0px;
+}
+
+.grid-header-row {
+	
+	background: grey;
+}
+
+.grid-header-cell {
+	display: inline-block;
+
+	width: 100px;
+	
+}
+
+.grid-canvas {
+	position: relative;
+
+}
+
+.grid-row {
+	background-color: white;
+
+	line-height: 20px;
+}
+
+.grid-row.odd {
+	background-color: #f6f7f8;
+}
+
+.grid-cell {
+	display: inline-block;
+	overflow: hidden;
+	
+	border: 1px solid transparent;
+	border-right: 1px dotted silver;
+	border-bottom-color: silver;
+
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    z-index: 1;
+    /* padding: 1px 2px 2px 1px; */
+    margin: 0;
+    white-space: nowrap;
+    cursor: default;
+}
+
+.grid-cell.active {
+    border-color: gray;
+    border-style: solid;
+}
+
+.grid-cell > span {
+
+}
+
+
+/* For Styling */
+.grid-cell {
+	width: 100px;
+}
