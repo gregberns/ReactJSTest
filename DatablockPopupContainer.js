@@ -1,3 +1,7 @@
+(function(){
+
+"using strict";
+
 var DatablockContainer = React.createClass({
   //displayName: 'DatablockContainer',
   handleNameChange: function(name) {
@@ -6,9 +10,12 @@ var DatablockContainer = React.createClass({
   handleQueryChange: function(query) {
     this.setState({query: query});
   },
-  handleAddColumn: function(col) {
+  handleColumnChange: function(col) {
     var db = this.state.datablock
-    db.addColumn(col)
+    
+    db.updateColumn(col)
+    db.calculateColumn(col)
+
     this.setState({datablock: db })
   },
   getInitialState: function() {
@@ -18,6 +25,7 @@ var DatablockContainer = React.createClass({
     
   },
   render: function() {
+
     return (
       <div>
         <h2>Field Editor</h2>
@@ -28,10 +36,10 @@ var DatablockContainer = React.createClass({
         <QueryEditor query={this.state.query} updateQuery={this.handleQueryChange} />
         <br />
         <h2>Datablock Table</h2>
-        <DatablockTable datablock={datatableData} />
+        <DatablockTable datablock={this.state.datablock} />
         <br />
         <h2>Column Editor</h2>
-        <ColumnEditor datablock={this.state.datablock} addColumn={this.handleAddColumn} />
+        <ColumnEditor datablock={this.state.datablock} updateColumn={this.handleColumnChange} />
         
       </div>
     );
@@ -78,19 +86,123 @@ var QueryEditor = React.createClass({
   }
 });
 
-var datatableData = {rows: [
-                            [["cow"],["sheep"],[" "]],
-                            [["chicken"],[" "],[" "]],
-                            [["goat"],["donkey"],["horse"]],
-                            [["pig"],["cat"],["dog"]]
-                          ],
-                     columns:[{name:'Col1', fxn: 'some function', additionalColumn: false}, 
-                              {name:'Col2', fxn: 'another function', additionalColumn: false}, 
-                              {name:'Col3', fxn: 'One more function', additionalColumn: false}],
-                      addColumn: function(col){
-                        this.columns.push(col)
-                      }
-                      };
+if (!Function.prototype.construct) {
+        Function.prototype.construct = function(argArray) {
+            if (! Array.isArray(argArray)) {
+                throw new TypeError("Argument must be an array");
+            }
+            var constr = this;
+            var nullaryFunc = Function.prototype.bind.apply(
+                constr, [null].concat(argArray));
+            //var nullaryFunc = Function.prototype.bind.apply(this,argArray);
+            return new nullaryFunc();
+        };
+    }
+
+var datatableData = { 
+  rows: [
+          ["cow","sheep"," "],
+          ["chicken"," "," "],
+          ["goat","donkey","horse"],
+          ["pig","cat","dog"]
+        ],
+  computedRows: [],
+  columns:[
+            {name:'Col1', fxn: '', calculatedColumn: false}, 
+            {name:'Col2', fxn: '', calculatedColumn: false}, 
+            {name:'Col3', fxn: '', calculatedColumn: false}
+          ],
+  updateColumn: function(col){
+    var arr = this.columns.filter(function(c){ return c.name === col.name })
+    if (arr.length === 0) {
+      //column exists
+      this.columns.push(col)  
+    } else {
+      arr[0] = col
+    }
+  },
+  removeColumn: function(col){
+
+  },
+  _updateColumnFxn: function() {
+    var self = this
+
+    var colArray = self.columns.
+      filter(function(c){ return !c.calculatedColumn }).
+      map(function(c){ return c.name })
+
+    return self.columns.
+                  map(function(c){
+                    
+                    if (!c.calculatedColumn) return false
+
+                    var cols = colArray.slice();
+                    cols.push("return " + c.fxn + ";")
+
+                    try {
+                      c['execFxn'] = Function.construct(cols)
+                      //To Exec call:
+                      //out = fxn.apply(this, rowArray)
+                    } catch(e) {
+                      console.log("error: "+ c.name)
+                    }
+
+                    return c
+                  })
+  },
+  calculateColumn: function(col){
+    var self = this
+
+    if (!col.fxn) return
+
+    var cols = this._updateColumnFxn()
+
+    var colIndex = self.columns.map(function(e,i){
+      if (e === col) return i
+    }).filter(isFinite)
+
+    self.rows.map(function(e, i, a){
+      try {
+        e[colIndex] = cols[colIndex].execFxn.apply(this, e)
+      } catch(e) {
+        e[colIndex] = "error"
+      }
+      return e
+    })
+
+  }
+};
+
+/*self.columns.
+      map(function(e,i,a){
+        
+        if (!e.calculatedColumn) return false
+
+        var colArray = self.columns.
+          filter(function(e){
+            return !e.calculatedColumn
+          }).
+          map(function(e){
+            return e.name
+          }).
+          push("return " + e.fxn + ";")
+        
+        var rowArray = self.rows[i]
+
+        var out
+
+        try {
+          var fxn = Function.construct(colArray)
+          //var fxn = new Function("ctx", "return " + e.fxn + ";")
+          out = fxn.apply(this, rowArray)
+        } catch(e) {
+          out = "error"
+        }
+
+        console.log(out)
+        
+      })*/
+
 
 var DatablockTable = React.createClass({
   render: function(){
@@ -161,23 +273,23 @@ var ColumnEditor = React.createClass({
     this.setState({selectedColumn: this.props.datablock.columns.filter(function(c){ return c.name === columnName })[0] })
   },
   handleUpdateColumnFunction: function(fxnText) {
-    var val = this.state.selectedColumn
-    val.fxn = fxnText
-    this.setState({selectedColumn: val});    
+    var col = this.state.selectedColumn
+    col.fxn = fxnText
+    this.setState({selectedColumn: col});
+    this.props.updateColumn(col)
   },
   handleCreateColumn: function(newName) {
-    var col = {name: newName, fxn: "", additionalColumn: true}
-    //this.props.datablock.addColumn(col)
-    this.props.addColumn(col)
-    this.setState({selectedColumn: col})    
+    var col = {name: newName, fxn: "", calculatedColumn: true}
+    this.setState({selectedColumn: col})
+    this.props.updateColumn(col)
   },
   getInitialState: function() {
-    return {selectedColumn: { name: ""}, addColumnEnabled: false};
+    return {selectedColumn: { name: ""}};
   },
   render: function(){
 
     var additionalColumns = this.props.datablock
-                                .columns.filter(function(c){ return c.additionalColumn })
+                                .columns.filter(function(c){ return c.calculatedColumn })
                                 .map(function(column){ return { label: column.name, value: column.name }});
 
     var invalidNames = this.props.datablock.columns.map(function(c){ return c.name })
@@ -194,7 +306,8 @@ var ColumnEditor = React.createClass({
         <input type="button" 
                value="Delete" />
 
-        <FieldEditor textPlaceholder="New Column Name..." 
+        <FieldEditor textPlaceholder="New Column Name..."
+                     submitPlaceholder="Add"
                      invalidValues={invalidNames} 
                      onSubmit={this.handleCreateColumn} />
 
@@ -210,6 +323,7 @@ var ColumnEditor = React.createClass({
 var FieldEditor = React.createClass({
   propTypes: {
     textPlaceholder: React.PropTypes.string,
+    submitPlaceholder: React.PropTypes.string,
     invalidValues: React.PropTypes.arrayOf(React.PropTypes.string),
     onSubmit: React.PropTypes.func
   },
@@ -236,7 +350,7 @@ var FieldEditor = React.createClass({
                  placeholder={this.props.textPlaceholder}
                  onChange={this.handleTextAreaChange}></input>
 
-          <input type="submit" value="Add" disabled={!noDup}/>
+          <input type="submit" value={this.props.submitPlaceholder} disabled={!noDup}/>
 
         </form>
       );
@@ -252,13 +366,15 @@ var ColumnFunctionEditor = React.createClass({
     this.props.updateFunction(newValue)
   },
   handleColumnSelected: function(e) {
-    this.props.updateFunction(this.props.column.fxn + '#'+ e.target.text + '#')
+    //this.props.updateFunction(this.props.column.fxn + '#'+ e.target.text + '#')
+    this.props.updateFunction(this.props.column.fxn + e.target.text)
   },
   render: function(){
     var self = this;
 
     var columns = this.props.columns.map(function(column){
-      return React.addons.createFragment({value: <option value={column} onClick={self.handleColumnSelected}>{column.name}</option>})
+      return React.addons.createFragment({value: <option value={column} 
+                                                         onClick={self.handleColumnSelected}>{column.name}</option>})
     });
 
     return (
@@ -268,7 +384,7 @@ var ColumnFunctionEditor = React.createClass({
         <TextArea ref="fxnValue" 
                   placeholder='Enter column function...'
                   onChange={this.handleFxnChange}
-                  fxn={this.props.column.fxn} 
+                  text={this.props.column.fxn} 
                   modifyText={this.modifyText} />
 
         <select className="columns-list" size="5">
@@ -280,10 +396,11 @@ var ColumnFunctionEditor = React.createClass({
   }
 });
 
-//The textarea tag has some issues in it
+//The textarea tag has some complexity to it
 //this wraps up those issues and provides an easier interface
+//No state is held in it, rather, changes can be listened to, and state managed elsewhere
 var TextArea = React.createClass({
-  handleValueChange: function(newValue){
+  handleTextChange: function(newValue){
     //this fires on every character entered
     if (this.props.onChange) {
       this.props.onChange(newValue)
@@ -291,8 +408,8 @@ var TextArea = React.createClass({
   },
   render: function(){
     var valueLink = {
-      value: this.props.fxn,
-      requestChange: this.handleValueChange
+      value: this.props.text,
+      requestChange: this.handleTextChange
     }
 
     var placeholder = this.props.placeholder || ''
@@ -301,6 +418,10 @@ var TextArea = React.createClass({
   }
 });
 
+//This is the logic in the 'old' TextArea
+//Notice how I would store state, then require the parent to call into 'modifyText' to add the extra column!
+//By removing the state, and pushing it up to the parent container, it makes the code much simpler.
+//Now we just throw changes up to the parent, and 
 /*var TextArea = React.createClass({
   handleValueChange: function(newValue){
     //this fires on every character entered
@@ -332,3 +453,5 @@ var TextArea = React.createClass({
 });*/
 
 React.render(<DatablockContainer />, document.getElementById('datablock'));
+
+}())
